@@ -1,10 +1,12 @@
 package com.alinavevel.moviedb.controller;
 
 import com.alinavevel.moviedb.entity.User_movie;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.ResponseEntity;
+import com.google.gson.JsonParser;
+import com.alinavevel.moviedb.utils.ResponseHandler;
+
+import com.google.gson.JsonObject;
+import com.google.gson.stream.JsonReader;
+import org.springframework.http.*;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -12,15 +14,17 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
 
 
+
+
 import java.sql.*;
+
+import static com.alinavevel.moviedb.utils.CRUD.*;
+
 
 @RestController
 @RequestMapping(value = "api")
 public class MovieController {
 
-    private static final String INSERT_USERS_SQL = "INSERT INTO user_movie" +
-            "  (userid , movieid , favorite , personal_rating , notes ) VALUES " +
-            " (?, ?, ?, ?, ?);";
 
 
 
@@ -35,6 +39,7 @@ public class MovieController {
 
         return responseEntity;
     }
+
 
     @GetMapping("movie/top")
     public ResponseEntity<String> getTop(){
@@ -57,9 +62,54 @@ public class MovieController {
     }
 
     @GetMapping("/movie/{movie_id}")
-    public ResponseEntity<String> getMovieById(@PathVariable int movie_id){
-        String url = "https://api.themoviedb.org/3/movie/" + movie_id;
-        return init(url);
+    public ResponseEntity<JsonObject> getMovieById(@PathVariable int movie_id) throws SQLException {
+        String urlString = "https://api.themoviedb.org/3/movie/" + movie_id;
+
+        User_movie user_movie = new User_movie();
+        ResponseEntity<String> responseEntity = init(urlString);
+
+
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        String currentUserName = authentication.getName();
+        if (!(authentication instanceof AnonymousAuthenticationToken)) {
+
+            currentUserName = authentication.getName();
+            System.out.println(currentUserName);
+            int userId = retrieveUserId(currentUserName);
+            System.out.println(userId);
+            user_movie.setUserid(userId);
+            try {
+
+                User_movie user = getUser_movieByID(movie_id, userId);
+                String jsonResponse = responseEntity.getBody();
+                if(user == null) {
+
+                    String json = jsonResponse.substring(0, jsonResponse.length()-1).concat(",\"favourite\": \"false\", \"personal_rating\":\"null\", \"notes\": \"null\"}");
+
+                    JsonObject jsonObject = new JsonParser().parse(json).getAsJsonObject();
+
+                    return ResponseEntity.ok(jsonObject);
+
+                }
+                else {
+                    String json = jsonResponse.substring(0, jsonResponse.length()-1).concat(",\"favourite\": \"" + user.isFavourite() + "\", \"personal_rating\":\"" + user.getPersonal_rating() + "\", \"notes\": \"" + user.getNotes() + "\"}");
+
+                    JsonObject jsonObject = new JsonParser().parse(json).getAsJsonObject();
+                    return ResponseEntity.ok(jsonObject);
+                }
+
+            } catch (SQLException e) {
+
+                e.printStackTrace();
+            }
+        }
+
+
+
+        return ResponseEntity.ok(new JsonParser().parse("{}").getAsJsonObject());
+
+
+
     }
 
     @GetMapping("/movie/{movie_id}credits")
@@ -105,15 +155,28 @@ public class MovieController {
             System.out.println(currentUserName);
             int userId = retrieveUserId(currentUserName);
             user_movie.setUserid(userId);
-            System.out.println(userId);
             try {
-                insertMovieDB(user_movie,movie_id);
+
+                User_movie user = getUser_movieByID(movie_id, userId);
+
+                if(user == null) {
+                    insertMovieDB(user_movie,movie_id);
+                    return ResponseHandler.generateResponse(init(urlString).getBody(), user_movie.isFavourite(), user_movie.getPersonal_rating(),user_movie.getNotes(), HttpStatus.OK);
+
+                }
+                else {
+                    updateRecord(user_movie,movie_id);
+
+                    System.out.println(ResponseHandler.generateResponse(init(urlString),user_movie.isFavourite(), user_movie.getPersonal_rating(),user_movie.getNotes(), HttpStatus.ACCEPTED));
+                    return ResponseHandler.generateResponse(init(urlString),user_movie.isFavourite(), user_movie.getPersonal_rating(),user_movie.getNotes(), HttpStatus.OK);
+
+                }
+
             } catch (SQLException e) {
-                // TODO Auto-generated catch block
+
                 e.printStackTrace();
             }
         }
-
 
 
 
@@ -122,58 +185,6 @@ public class MovieController {
 
 
 
-
-
-
-
-
-    public void insertMovieDB(User_movie user_movie,int id_movie) throws SQLException {
-        System.out.println(INSERT_USERS_SQL);
-        // Step 1: Establishing a Connection
-
-        try (Connection connection = com.alinavevel.moviedb.controller.H2JDBCUtils.getConnection();
-             // Step 2:Create a statement using connection object
-             PreparedStatement preparedStatement = connection.prepareStatement(INSERT_USERS_SQL)) {
-            preparedStatement.setInt(1, user_movie.getUserid() );
-            preparedStatement.setInt(2,id_movie);
-            preparedStatement.setBoolean(3, user_movie.isFavourite());
-            preparedStatement.setInt(4, user_movie.getPersonal_rating());
-            preparedStatement.setString(5, user_movie.getNotes());
-
-
-
-            System.out.println(preparedStatement);
-            // Step 3: Execute the query or update query
-            preparedStatement.executeUpdate();
-        } catch (SQLException e) {
-
-
-
-            // print SQL exception information
-
-        }
-
-
-
-
-    }
-
-
-
-    public int retrieveUserId(String userName) throws SQLException {
-        String consulta = "select userid from users where username = '" + userName + "'";
-        try(Connection connection = com.alinavevel.moviedb.controller.H2JDBCUtils.getConnection();
-            Statement statement = connection.createStatement()){
-
-            ResultSet rs = statement.executeQuery(consulta);
-
-            if(rs.next()) {
-                return rs.getInt("userid");
-            }
-            return 0;
-
-        }
-    }
 
 
 }

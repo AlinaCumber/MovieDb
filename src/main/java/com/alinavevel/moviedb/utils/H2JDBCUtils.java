@@ -1,4 +1,4 @@
-package com.alinavevel.moviedb.controller;
+package com.alinavevel.moviedb.utils;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
