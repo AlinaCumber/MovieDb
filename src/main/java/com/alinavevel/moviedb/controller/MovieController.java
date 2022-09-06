@@ -5,12 +5,14 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
 
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.SQLException;
+
+import java.sql.*;
 
 @RestController
 @RequestMapping(value = "api")
@@ -19,6 +21,8 @@ public class MovieController {
     private static final String INSERT_USERS_SQL = "INSERT INTO user_movie" +
             "  (userid , movieid , favorite , personal_rating , notes ) VALUES " +
             " (?, ?, ?, ?, ?);";
+
+
 
 
     public ResponseEntity<String> init(String url) {
@@ -89,27 +93,48 @@ public class MovieController {
     }
 
     @PatchMapping("/movie/{movie_id}")
-    public ResponseEntity<String> postMovie(@PathVariable int movie_id, @RequestBody User_movie user_movie) {
+    public ResponseEntity<String> postMovie(@PathVariable int movie_id, @RequestBody User_movie user_movie) throws SQLException {
         String urlString="https://api.themoviedb.org/3/movie/"+movie_id+"?language=es-ES";
+        //Recuperacion del nombre de usuario
+        String currentUserName = "";
 
-
-        try {
-            insertMovieDB(user_movie,movie_id);
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (!(authentication instanceof AnonymousAuthenticationToken)) {
+            //hay autenticacion
+            currentUserName = authentication.getName();
+            System.out.println(currentUserName);
+            int userId = retrieveUserId(currentUserName);
+            user_movie.setUserid(userId);
+            System.out.println(userId);
+            try {
+                insertMovieDB(user_movie,movie_id);
+            } catch (SQLException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            }
         }
+
+
+
 
         return init(urlString);
     }
+
+
+
+
+
+
+
 
     public void insertMovieDB(User_movie user_movie,int id_movie) throws SQLException {
         System.out.println(INSERT_USERS_SQL);
         // Step 1: Establishing a Connection
 
-        try (Connection connection = H2JDBCUtils.getConnection();
+        try (Connection connection = com.alinavevel.moviedb.controller.H2JDBCUtils.getConnection();
              // Step 2:Create a statement using connection object
              PreparedStatement preparedStatement = connection.prepareStatement(INSERT_USERS_SQL)) {
-            preparedStatement.setInt(1, 1 );
+            preparedStatement.setInt(1, user_movie.getUserid() );
             preparedStatement.setInt(2,id_movie);
             preparedStatement.setBoolean(3, user_movie.isFavourite());
             preparedStatement.setInt(4, user_movie.getPersonal_rating());
@@ -130,7 +155,24 @@ public class MovieController {
 
 
 
-        // Step 4: try-with-resource statement will auto close the connection.
+
+    }
+
+
+
+    public int retrieveUserId(String userName) throws SQLException {
+        String consulta = "select userid from users where username = '" + userName + "'";
+        try(Connection connection = com.alinavevel.moviedb.controller.H2JDBCUtils.getConnection();
+            Statement statement = connection.createStatement()){
+
+            ResultSet rs = statement.executeQuery(consulta);
+
+            if(rs.next()) {
+                return rs.getInt("userid");
+            }
+            return 0;
+
+        }
     }
 
 
