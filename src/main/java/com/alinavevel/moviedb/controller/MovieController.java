@@ -1,20 +1,26 @@
 package com.alinavevel.moviedb.controller;
 
+import com.alinavevel.moviedb.entity.User_movie;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 
 @RestController
 @RequestMapping(value = "api")
 public class MovieController {
 
-    @GetMapping("/toprated")
+    private static final String INSERT_USERS_SQL = "INSERT INTO user_movie" +
+            "  (userid , movieid , favorite , personal_rating , notes ) VALUES " +
+            " (?, ?, ?, ?, ?);";
+
+
     public ResponseEntity<String> init(String url) {
         RestTemplate restTemplate = new RestTemplate();
         HttpHeaders headers = new HttpHeaders();
@@ -80,6 +86,50 @@ public class MovieController {
     public ResponseEntity<String> getMovieSimilarById(@PathVariable int movie_id){
         String url = "https://api.themoviedb.org/3/movie/" + movie_id + "/similar";
         return init(url);
+    }
+
+    @PatchMapping("/movie/{movie_id}")
+    public ResponseEntity<String> postMovie(@PathVariable int movie_id, @RequestBody User_movie user_movie) {
+        String urlString="https://api.themoviedb.org/3/movie/"+movie_id+"?language=es-ES";
+
+
+        try {
+            insertMovieDB(user_movie,movie_id);
+        } catch (Exception e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+        return init(urlString);
+    }
+
+    public void insertMovieDB(User_movie user_movie,int id_movie) throws SQLException {
+        System.out.println(INSERT_USERS_SQL);
+        // Step 1: Establishing a Connection
+        try (Connection connection = H2JDBCUtils.getConnection();
+             // Step 2:Create a statement using connection object
+             PreparedStatement preparedStatement = connection.prepareStatement(INSERT_USERS_SQL)) {
+            preparedStatement.setInt(1, 1 );
+            preparedStatement.setInt(2,id_movie);
+            preparedStatement.setBoolean(3, user_movie.isFavourite());
+            preparedStatement.setInt(4, user_movie.getPersonal_rating());
+            preparedStatement.setString(5, user_movie.getNotes());
+
+
+
+            System.out.println(preparedStatement);
+            // Step 3: Execute the query or update query
+            preparedStatement.executeUpdate();
+        } catch (SQLException e) {
+
+
+
+            // print SQL exception information
+
+        }
+
+
+
+        // Step 4: try-with-resource statement will auto close the connection.
     }
 
 
