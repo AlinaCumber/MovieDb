@@ -95,16 +95,17 @@ public class MovieController {
 
         try {
             insertMovieDB(user_movie,movie_id);
-        } catch (Exception e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
         }
+
         return init(urlString);
     }
 
     public void insertMovieDB(User_movie user_movie,int id_movie) throws SQLException {
         System.out.println(INSERT_USERS_SQL);
         // Step 1: Establishing a Connection
+
         try (Connection connection = H2JDBCUtils.getConnection();
              // Step 2:Create a statement using connection object
              PreparedStatement preparedStatement = connection.prepareStatement(INSERT_USERS_SQL)) {
